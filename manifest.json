@@ -9,7 +9,9 @@
     "storage"
   ],
   "host_permissions": [
-    "*://*.oreilly.com/*"
+    "*://*.oreilly.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "https://translate.googleapis.com/*"
   ],
   "action": {
     "default_popup": "popup.html",

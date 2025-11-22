@@ -141,6 +141,81 @@
             color: #888;
             height: 15px;
         }
+
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 10px;
+            padding-right: 40px;
+            background-color: var(--secondary-bg);
+            color: white;
+            border: 1px solid #444;
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            box-sizing: border-box;
+        }
+
+        input[type="password"]:focus,
+        input[type="text"]:focus {
+            border-color: var(--primary-color);
+        }
+
+        .toggle-visibility {
+            position: absolute;
+            right: 5px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 5px 10px;
+            width: auto;
+        }
+
+        .toggle-visibility:hover {
+            background: none;
+            opacity: 0.7;
+        }
+
+        .help-text {
+            font-size: 11px;
+            color: #888;
+            margin-top: 5px;
+        }
+
+        .help-text a {
+            color: var(--primary-color);
+            text-decoration: none;
+        }
+
+        .help-text a:hover {
+            text-decoration: underline;
+        }
+
+        .provider-status {
+            font-size: 12px;
+            margin-top: 8px;
+            padding: 6px 10px;
+            border-radius: 4px;
+            text-align: center;
+        }
+
+        .provider-status.gemini {
+            background-color: #1a4d2e;
+            color: #4ade80;
+        }
+
+        .provider-status.google {
+            background-color: #4a3d1a;
+            color: #fbbf24;
+        }
+
+        .provider-status.none {
+            background-color: #2d2d2d;
+            color: #888;
+        }
     </style>
 </head>
 
@@ -161,6 +236,46 @@
             <option value="ko">Korean (한국어)</option>
             <option value="zh-CN">Chinese (Simplified)</option>
         </select>
+    </div>
+
+    <div class="control-group">
+        <label for="provider">Translation Provider</label>
+        <select id="provider">
+            <option value="auto">Auto (Gemini if available)</option>
+            <option value="gemini">Gemini AI</option>
+            <option value="google">Google Translate</option>
+        </select>
+    </div>
+
+    <div class="control-group" id="geminiConfig">
+        <label for="apiKey">Gemini API Key (Optional)</label>
+        <div style="position: relative;">
+            <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
+            <button type="button" id="toggleApiKey" class="toggle-visibility">👁️</button>
+        </div>
+
+        <div style="margin-top: 15px;">
+            <label for="geminiModel">Gemini Model</label>
+            <div style="display: flex; gap: 8px;">
+                <select id="geminiModel" style="flex-grow: 1;">
+                    <option value="gemini-1.5-flash-001">gemini-1.5-flash-001 (Default)</option>
+                </select>
+                <button type="button" id="refreshModelsBtn" style="width: auto; padding: 0 10px; font-size: 16px;"
+                    title="Refresh Models">🔄</button>
+            </div>
+        </div>
+
+        <div style="display: flex; gap: 10px; margin-top: 15px;">
+            <button type="button" id="testConnectionBtn"
+                style="padding: 8px; font-size: 12px; background-color: #333;">Test Connection</button>
+        </div>
+        <div id="testStatus" style="margin-top: 5px; font-size: 12px;"></div>
+        <div class="help-text">
+            Get your free API key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+        </div>
+    </div>
+
+    <div id="providerStatus" class="provider-status"></div>
     </div>
 
     <div class="control-group">

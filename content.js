@@ -2,14 +2,30 @@
 
 console.log("O'Reilly Subtitle Translator: Content script loaded in " + window.location.href);
 
+// Check if extension context is valid
+function isExtensionContextValid() {
+    try {
+        return chrome.runtime && chrome.runtime.id;
+    } catch (e) {
+        return false;
+    }
+}
+
 let targetLang = 'tr';
 let translationEnabled = true;
 let currentSubtitleText = '';
+let isDragging = false;
+let dragStartX = 0;
+let dragStartY = 0;
+let initialLeft = 0;
+let initialTop = 0;
+let savedPosition = null;
 
 // Load settings
-chrome.storage.sync.get(['targetLang', 'enabled'], (result) => {
+chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition'], (result) => {
     if (result.targetLang) targetLang = result.targetLang;
     if (result.enabled !== undefined) translationEnabled = result.enabled;
+    if (result.overlayPosition) savedPosition = result.overlayPosition;
 });
 
 // Listen for settings updates
@@ -32,12 +48,23 @@ function createOverlay() {
     // Find the best container for the overlay
     // 1. Try the current fullscreen element
     // 2. Try known player containers
-    // 3. Fallback to body
+    // 3. Try the parent of the first video element found
+    // 4. Fallback to body
     let container = document.fullscreenElement ||
         document.querySelector('.kaltura-player-container') ||
         document.querySelector('.video-js') ||
-        document.querySelector('#orm-kaltura-player') ||
-        document.body;
+        document.querySelector('#orm-kaltura-player');
+
+    if (!container) {
+        const video = document.querySelector('video');
+        if (video) {
+            container = video.parentElement;
+        }
+    }
+
+    if (!container) {
+        container = document.body;
+    }
 
     if (!overlay) {
         overlay = document.createElement('div');
@@ -53,6 +80,77 @@ function createOverlay() {
             container.appendChild(overlay);
         }
     }
+
+
+    // Adjust positioning strategy based on container
+    if (savedPosition) {
+        overlay.style.position = 'fixed'; // Use fixed for dragged element to be safe
+        overlay.style.left = '50%'; // Force center
+        overlay.style.top = savedPosition.top;
+        overlay.style.bottom = 'auto';
+        overlay.style.transform = 'translateX(-50%)'; // Force center transform
+    } else if (container === document.body) {
+        overlay.style.position = 'fixed';
+        overlay.style.bottom = '100px'; // Higher up for fixed position to avoid bottom bars
+        overlay.style.left = '50%';
+        overlay.style.transform = 'translateX(-50%)';
+    } else {
+        overlay.style.position = 'absolute';
+        overlay.style.bottom = '80px';
+        overlay.style.left = '50%';
+        overlay.style.transform = 'translateX(-50%)';
+        // Ensure container has relative positioning if not body
+        const style = window.getComputedStyle(container);
+        if (style.position === 'static') {
+            container.style.position = 'relative';
+        }
+    }
+
+    console.log('Overlay created/updated in container:', container.tagName, container.className);
+
+    // Add drag event listeners
+    if (!overlay.hasAttribute('data-drag-initialized')) {
+        overlay.setAttribute('data-drag-initialized', 'true');
+
+        overlay.addEventListener('mousedown', (e) => {
+            isDragging = true;
+            dragStartY = e.clientY;
+
+            // Get initial position relative to viewport since we switch to fixed
+            const rect = overlay.getBoundingClientRect();
+            initialTop = rect.top;
+
+            // Switch to fixed positioning immediately for smooth dragging
+            overlay.style.position = 'fixed';
+            overlay.style.left = '50%';
+            overlay.style.top = initialTop + 'px';
+            overlay.style.bottom = 'auto';
+            overlay.style.transform = 'translateX(-50%)';
+            overlay.style.cursor = 'grabbing';
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+            e.preventDefault(); // Prevent selection
+
+            const deltaY = e.clientY - dragStartY;
+
+            overlay.style.top = (initialTop + deltaY) + 'px';
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            overlay.style.cursor = 'move';
+
+            // Save position
+            savedPosition = {
+                top: overlay.style.top
+            };
+            chrome.storage.sync.set({ overlayPosition: savedPosition });
+        });
+    }
+
     return overlay;
 }
 
@@ -72,29 +170,69 @@ function removeOverlay() {
     }
 }
 
-function showTranslation(text) {
+function showTranslation(text, provider) {
     if (!translationEnabled || !text) return;
 
     const overlay = createOverlay();
-    overlay.textContent = text;
+    overlay.innerHTML = ''; // Clear previous content
+
+    // Create wrapper for relative positioning
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'inline-block';
+    wrapper.textContent = text;
+
+    // Add provider badge
+    if (provider) {
+        const badge = document.createElement('div');
+        badge.className = 'oreilly-provider-badge';
+        if (provider === 'gemini') {
+            badge.textContent = '🤖 AI';
+            badge.style.backgroundColor = '#1a4d2e';
+            badge.style.color = '#4ade80';
+        } else if (provider === 'google') {
+            badge.textContent = '⚡ GT';
+            badge.style.backgroundColor = '#4a3d1a';
+            badge.style.color = '#fbbf24';
+        } else if (provider === 'error') {
+            badge.textContent = '❌ ERR';
+            badge.style.backgroundColor = '#4d1a1a';
+            badge.style.color = '#f87171';
+        }
+        wrapper.appendChild(badge);
+    }
+
+    overlay.appendChild(wrapper);
     overlay.style.display = 'block';
+    console.log('Overlay updated and displayed');
 }
 
 // Translation function using background script
 async function translateText(text) {
-    if (!text) return '';
+    if (!text) return { translatedText: '', provider: 'none' };
 
     return new Promise((resolve) => {
-        chrome.runtime.sendMessage({ action: 'translate', text, targetLang }, (response) => {
-            if (chrome.runtime.lastError) {
-                console.error(chrome.runtime.lastError);
-                resolve(text);
-            } else if (response && response.translatedText) {
-                resolve(response.translatedText);
-            } else {
-                resolve(text);
-            }
-        });
+        try {
+            chrome.runtime.sendMessage({ action: 'translate', text, targetLang }, (response) => {
+                if (chrome.runtime.lastError) {
+                    // Extension context invalidated or other runtime error
+                    console.warn('Translation failed:', chrome.runtime.lastError.message);
+                    resolve({ translatedText: text, provider: 'error' }); // Return original text
+                } else if (response && response.translatedText) {
+                    resolve({
+                        translatedText: response.translatedText,
+                        provider: response.provider,
+                        error: response.error
+                    });
+                } else {
+                    resolve({ translatedText: text, provider: 'error', error: 'Unknown response format' });
+                }
+            });
+        } catch (error) {
+            // Catch any synchronous errors
+            console.warn('Translation error:', error);
+            resolve({ translatedText: text, provider: 'error' });
+        }
     });
 }
 
@@ -118,6 +256,13 @@ function observeShadowRoot(node) {
 
 function observeDOM(targetNode) {
     const observer = new MutationObserver(async (mutations) => {
+        // Check if extension context is still valid
+        if (!isExtensionContextValid()) {
+            console.warn('Extension context invalidated, stopping observer');
+            observer.disconnect();
+            return;
+        }
+
         if (!translationEnabled) return;
 
         for (const mutation of mutations) {
@@ -154,6 +299,7 @@ async function checkNode(target) {
         const classStr = typeof className === 'string' ? className : (className.baseVal || '');
 
         if (classStr &&
+            !classStr.includes('oreilly-subtitle-overlay') && // Ignore our own overlay
             (classStr.includes('caption') ||
                 classStr.includes('subtitle') ||
                 classStr.includes('track') ||
@@ -184,13 +330,26 @@ async function checkNode(target) {
         }
     }
 
-    if (isSubtitle && text && text.trim().length > 0 && text !== currentSubtitleText) {
-        currentSubtitleText = text;
-        const translated = await translateText(text);
-        // Only show translation if the subtitle hasn't changed in the meantime
-        if (currentSubtitleText === text) {
-            showTranslation(translated);
+    if (isSubtitle && text && text.trim().length > 0) {
+        if (text !== currentSubtitleText) {
+            console.log('Subtitle detected:', text);
+            currentSubtitleText = text;
+            const result = await translateText(text);
+            console.log('Translation result:', result);
+
+            if (result.provider === 'error' && result.error) {
+                console.error('Translation failed with error:', result.error);
+            }
+
+            // Only show translation if the subtitle hasn't changed in the meantime
+            if (currentSubtitleText === text) {
+                showTranslation(result.translatedText, result.provider);
+            } else {
+                console.log('Subtitle changed during translation, skipping display');
+            }
         }
+    } else if (isSubtitle) {
+        // console.log('Subtitle detected but empty or same as current');
     }
 }
 
