@@ -1,0 +1,28 @@
+/* Styles for the subtitle overlay */
+.oreilly-subtitle-overlay {
+    position: absolute;
+    top: 20px;
+    /* Position at top to avoid conflict */
+    bottom: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    padding: 4px 12px;
+    border-radius: 6px;
+    font-size: 18px;
+    /* Slightly smaller to fit */
+    font-family: 'Segoe UI', sans-serif;
+    font-weight: 500;
+    z-index: 2147483647;
+    /* Max z-index */
+    text-align: center;
+    pointer-events: none;
+    max-width: 90%;
+    text-shadow: 1px 1px 2px black;
+    backdrop-filter: blur(2px);
+    transition: opacity 0.2s ease;
+    line-height: 1.3;
+}
+
+/* Removed aggressive positioning of native subtitles to fix visibility issues */
