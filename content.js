@@ -331,38 +331,148 @@ async function checkNode(target) {
     }
 
     if (isSubtitle && text && text.trim().length > 0) {
+        // Hide the native subtitle element
+        if (target.nodeType === Node.ELEMENT_NODE) {
+            target.style.visibility = 'hidden';
+        } else if (target.nodeType === Node.TEXT_NODE && target.parentElement) {
+            target.parentElement.style.visibility = 'hidden';
+        }
+
         if (text !== currentSubtitleText) {
             console.log('Subtitle detected:', text);
             currentSubtitleText = text;
-            const result = await translateText(text);
-            console.log('Translation result:', result);
 
-            if (result.provider === 'error' && result.error) {
-                console.error('Translation failed with error:', result.error);
-            }
-
-            // Only show translation if the subtitle hasn't changed in the meantime
-            if (currentSubtitleText === text) {
-                showTranslation(result.translatedText, result.provider);
-            } else {
-                console.log('Subtitle changed during translation, skipping display');
-            }
+            // Show interactive subtitle immediately with original text
+            showInteractiveSubtitle(text);
         }
     } else if (isSubtitle) {
-        // console.log('Subtitle detected but empty or same as current');
+        // Ensure native subtitles are hidden even if text hasn't changed
+        if (target.nodeType === Node.ELEMENT_NODE) {
+            target.style.visibility = 'hidden';
+        } else if (target.nodeType === Node.TEXT_NODE && target.parentElement) {
+            target.parentElement.style.visibility = 'hidden';
+        }
+    }
+}
+
+function showInteractiveSubtitle(text) {
+    if (!translationEnabled || !text) return;
+
+    const overlay = createOverlay();
+    overlay.innerHTML = ''; // Clear previous content
+
+    // Create wrapper for relative positioning
+    const wrapper = document.createElement('div');
+    wrapper.style.position = 'relative';
+    wrapper.style.display = 'inline-block';
+
+    // Split text into words and create interactive spans
+    const words = text.split(/\s+/);
+    words.forEach((word, index) => {
+        const wordSpan = document.createElement('span');
+        wordSpan.textContent = word;
+        wordSpan.className = 'interactive-word';
+        wordSpan.onclick = (e) => handleWordClick(e, word);
+        wrapper.appendChild(wordSpan);
+
+        // Add a space after each word (except the last one, though it doesn't hurt)
+        if (index < words.length - 1) {
+            wrapper.appendChild(document.createTextNode(' '));
+        }
+    });
+
+    overlay.appendChild(wrapper);
+    overlay.style.display = 'block';
+}
+
+async function handleWordClick(event, word) {
+    // Remove existing tooltips
+    const existingTooltip = document.querySelector('.oreilly-translation-tooltip');
+    if (existingTooltip) existingTooltip.remove();
+
+    // Clean the word (remove punctuation)
+    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+    if (!cleanWord) return;
+
+    // Show loading state or immediate feedback if needed
+    event.target.style.opacity = '0.7';
+
+    const result = await translateText(cleanWord);
+
+    event.target.style.opacity = '1';
+
+    if (result.translatedText) {
+        showTooltip(event.target, result.translatedText);
+    }
+}
+
+function showTooltip(targetElement, text) {
+    const tooltip = document.createElement('div');
+    tooltip.className = 'oreilly-translation-tooltip';
+    tooltip.textContent = text;
+
+    document.body.appendChild(tooltip);
+
+    const rect = targetElement.getBoundingClientRect();
+    const tooltipRect = tooltip.getBoundingClientRect();
+
+    // Position above the word
+    let top = rect.top - tooltipRect.height - 10;
+    let left = rect.left + (rect.width / 2) - (tooltipRect.width / 2);
+
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+
+    // Close on click outside
+    const closeHandler = (e) => {
+        if (!tooltip.contains(e.target) && e.target !== targetElement) {
+            tooltip.remove();
+            document.removeEventListener('click', closeHandler);
+        }
+    };
+
+    // Add a small delay to prevent immediate closing if the click event bubbles
+    setTimeout(() => {
+        document.addEventListener('click', closeHandler);
+    }, 100);
+}
+
+function scanForSubtitles(node) {
+    if (!node) return;
+
+    // Check if the current node is a subtitle
+    checkNode(node);
+
+    // If this node has a shadow root, scan it too
+    if (node.shadowRoot) {
+        scanForSubtitles(node.shadowRoot);
+        observeDOM(node.shadowRoot); // Ensure we observe it too
+    }
+
+    // Recursively scan children
+    let child = node.firstChild;
+    while (child) {
+        scanForSubtitles(child);
+        child = child.nextSibling;
     }
 }
 
 function observeSubtitles() {
+    console.log("O'Reilly Translator: Starting observer and initial scan...");
+
     // Start observing the main document
     observeDOM(document.body);
 
-    // Scan for existing shadow roots
-    observeShadowRoot(document.body);
+    // Scan for existing shadow roots and subtitles
+    scanForSubtitles(document.body);
 
     console.log("O'Reilly Translator: Observer active.");
 }
 
 // Start observing
-// Wait a bit for the page to load
-setTimeout(observeSubtitles, 3000);
+// Use a shorter delay or check readyState
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(observeSubtitles, 1000);
+} else {
+    window.addEventListener('load', () => setTimeout(observeSubtitles, 1000));
+}
