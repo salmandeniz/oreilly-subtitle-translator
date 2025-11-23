@@ -8,12 +8,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const saveBtn = document.getElementById('saveBtn');
 
     const providerSelect = document.getElementById('provider');
+    const glossaryInput = document.getElementById('glossary');
     const geminiConfig = document.getElementById('geminiConfig');
     const geminiModelSelect = document.getElementById('geminiModel');
     const refreshModelsBtn = document.getElementById('refreshModelsBtn');
 
     // Load settings
-    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider'], (result) => {
+    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary'], (result) => {
         if (result.targetLang) {
             targetLangSelect.value = result.targetLang;
         }
@@ -25,6 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (result.translationProvider) {
             providerSelect.value = result.translationProvider;
+        }
+        if (result.glossary) {
+            glossaryInput.value = result.glossary;
         }
 
         // Toggle Gemini config visibility
@@ -219,7 +223,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const targetLang = targetLangSelect.value;
                 const enabled = enableTranslationCheckbox.checked;
                 const provider = providerSelect.value;
-                chrome.storage.sync.set({ targetLang, enabled, geminiApiKey: apiKey, geminiModel: model, translationProvider: provider }, () => {
+                const glossary = glossaryInput.value;
+                chrome.storage.sync.set({ targetLang, enabled, geminiApiKey: apiKey, geminiModel: model, translationProvider: provider, glossary }, () => {
                     console.log('Settings auto-saved after successful test');
                     // Notify content script
                     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -253,9 +258,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const geminiApiKey = apiKeyInput.value.trim();
         const geminiModel = geminiModelSelect.value;
         const translationProvider = providerSelect.value;
+        const glossary = glossaryInput.value;
         const status = document.getElementById('status');
 
-        chrome.storage.sync.set({ targetLang, enabled, geminiApiKey, geminiModel, translationProvider }, () => {
+        chrome.storage.sync.set({ targetLang, enabled, geminiApiKey, geminiModel, translationProvider, glossary }, () => {
             status.textContent = 'Settings saved!';
             setTimeout(() => {
                 status.textContent = '';
