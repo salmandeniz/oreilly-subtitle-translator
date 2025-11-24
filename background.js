@@ -130,7 +130,8 @@ function escapeRegExp(string) {
 }
 
 // Main message listener
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+// Main message listener
+function handleMessage(request, sender, sendResponse) {
     if (request.action === 'translate') {
         const { text, targetLang } = request;
 
@@ -204,13 +205,16 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true; // Will respond asynchronously
     }
-});
+}
+
+chrome.runtime.onMessage.addListener(handleMessage);
 
 // Export for testing
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         translateWithGemini,
         getLanguageName,
-        translateWithGoogleTranslate
+        translateWithGoogleTranslate,
+        handleMessage
     };
 }
