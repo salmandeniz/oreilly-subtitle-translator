@@ -599,3 +599,16 @@ if (document.readyState === 'complete' || document.readyState === 'interactive')
 } else {
     window.addEventListener('load', () => setTimeout(observeSubtitles, 1000));
 }
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        showInteractiveSubtitle,
+        translateText,
+        createOverlay,
+        scanForSubtitles,
+        checkNode,
+        handleWordClick,
+        handleWordRightClick
+    };
+}

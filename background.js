@@ -205,3 +205,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         return true; // Will respond asynchronously
     }
 });
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = {
+        translateWithGemini,
+        getLanguageName,
+        translateWithGoogleTranslate
+    };
+}
