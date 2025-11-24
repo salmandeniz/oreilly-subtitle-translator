@@ -60,6 +60,17 @@
     background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Translated Subtitle (Secondary) */
+.oreilly-translated-subtitle {
+    display: block;
+    margin-top: 6px;
+    font-size: 16px;
+    color: #fbbf24;
+    /* Amber color to distinguish from main text */
+    font-weight: 500;
+    text-shadow: 1px 1px 1px black;
+}
+
 /* Translation Tooltip */
 .oreilly-translation-tooltip {
     position: fixed;

@@ -13,6 +13,7 @@ function isExtensionContextValid() {
 
 let targetLang = 'tr';
 let translationEnabled = true;
+let showTranslatedSubtitle = false;
 let currentSubtitleText = '';
 let isDragging = false;
 let dragStartX = 0;
@@ -22,21 +23,57 @@ let initialTop = 0;
 let savedPosition = null;
 
 // Load settings
-chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition'], (result) => {
+chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle'], (result) => {
     if (result.targetLang) targetLang = result.targetLang;
     if (result.enabled !== undefined) translationEnabled = result.enabled;
+    if (result.showTranslatedSubtitle !== undefined) showTranslatedSubtitle = result.showTranslatedSubtitle;
     if (result.overlayPosition) savedPosition = result.overlayPosition;
 });
 
 // Listen for settings updates
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+// Listen for settings updates
+chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     if (request.action === 'updateSettings') {
+        console.log('Received updateSettings message:', request.settings);
         targetLang = request.settings.targetLang;
         translationEnabled = request.settings.enabled;
-        console.log('Settings updated:', request.settings);
+        if (request.settings.showTranslatedSubtitle !== undefined) {
+            showTranslatedSubtitle = request.settings.showTranslatedSubtitle;
+        }
+
+        console.log('Current state:', { translationEnabled, showTranslatedSubtitle, currentSubtitleText });
+
         // Clear current overlay if disabled
         if (!translationEnabled) {
             removeOverlay();
+            currentSubtitleText = ''; // Reset current text
+        } else {
+            console.log('Refreshing subtitle display...');
+
+            if (currentSubtitleText) {
+                // Scenario: Translation was already on, just changing display options
+                console.log('Refreshing existing subtitle:', currentSubtitleText);
+
+                if (showTranslatedSubtitle) {
+                    // Show loading state immediately
+                    showInteractiveSubtitle(currentSubtitleText, "Loading...");
+
+                    const result = await translateText(currentSubtitleText);
+                    if (result && result.translatedText) {
+                        showInteractiveSubtitle(currentSubtitleText, result.translatedText);
+                    } else {
+                        // Fallback if translation failed or returned empty
+                        showInteractiveSubtitle(currentSubtitleText, null);
+                    }
+                } else {
+                    // Just show interactive words without translation
+                    showInteractiveSubtitle(currentSubtitleText, null);
+                }
+            } else {
+                // Scenario: Translation was off, or no subtitle tracked. Force a scan.
+                console.log('No current subtitle tracked. Scanning for subtitles...');
+                scanForSubtitles(document.body);
+            }
         }
     }
 });
@@ -342,8 +379,16 @@ async function checkNode(target) {
             console.log('Subtitle detected:', text);
             currentSubtitleText = text;
 
-            // Show interactive subtitle immediately with original text
-            showInteractiveSubtitle(text);
+            let translatedText = null;
+            if (showTranslatedSubtitle) {
+                const result = await translateText(text);
+                if (result && result.translatedText) {
+                    translatedText = result.translatedText;
+                }
+            }
+
+            // Show interactive subtitle immediately with original text, and potentially translated text
+            showInteractiveSubtitle(text, translatedText);
         }
     } else if (isSubtitle) {
         // Ensure native subtitles are hidden even if text hasn't changed
@@ -355,7 +400,7 @@ async function checkNode(target) {
     }
 }
 
-function showInteractiveSubtitle(text) {
+function showInteractiveSubtitle(text, translatedText) {
     if (!translationEnabled || !text) return;
 
     const overlay = createOverlay();
@@ -380,6 +425,15 @@ function showInteractiveSubtitle(text) {
             wrapper.appendChild(document.createTextNode(' '));
         }
     });
+
+    // Add translated text if available
+    if (translatedText) {
+        const translatedDiv = document.createElement('div');
+        translatedDiv.className = 'oreilly-translated-subtitle';
+        translatedDiv.textContent = translatedText;
+        wrapper.appendChild(document.createElement('br')); // Line break
+        wrapper.appendChild(translatedDiv);
+    }
 
     overlay.appendChild(wrapper);
     overlay.style.display = 'block';

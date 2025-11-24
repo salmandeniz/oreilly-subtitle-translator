@@ -13,13 +13,18 @@ document.addEventListener('DOMContentLoaded', () => {
     const geminiModelSelect = document.getElementById('geminiModel');
     const refreshModelsBtn = document.getElementById('refreshModelsBtn');
 
+    const showTranslatedSubtitleCheckbox = document.getElementById('showTranslatedSubtitle');
+
     // Load settings
-    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary'], (result) => {
+    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle'], (result) => {
         if (result.targetLang) {
             targetLangSelect.value = result.targetLang;
         }
         if (result.enabled !== undefined) {
             enableTranslationCheckbox.checked = result.enabled;
+        }
+        if (result.showTranslatedSubtitle !== undefined) {
+            showTranslatedSubtitleCheckbox.checked = result.showTranslatedSubtitle;
         }
         if (result.geminiApiKey) {
             apiKeyInput.value = result.geminiApiKey;
@@ -222,16 +227,17 @@ document.addEventListener('DOMContentLoaded', () => {
                 // Auto-save settings on success
                 const targetLang = targetLangSelect.value;
                 const enabled = enableTranslationCheckbox.checked;
+                const showTranslatedSubtitle = showTranslatedSubtitleCheckbox.checked;
                 const provider = providerSelect.value;
                 const glossary = glossaryInput.value;
-                chrome.storage.sync.set({ targetLang, enabled, geminiApiKey: apiKey, geminiModel: model, translationProvider: provider, glossary }, () => {
+                chrome.storage.sync.set({ targetLang, enabled, showTranslatedSubtitle, geminiApiKey: apiKey, geminiModel: model, translationProvider: provider, glossary }, () => {
                     console.log('Settings auto-saved after successful test');
                     // Notify content script
                     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
                         if (tabs[0]) {
                             chrome.tabs.sendMessage(tabs[0].id, {
                                 action: 'updateSettings',
-                                settings: { targetLang, enabled }
+                                settings: { targetLang, enabled, showTranslatedSubtitle }
                             });
                         }
                     });
@@ -251,31 +257,45 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Save settings
-    saveBtn.addEventListener('click', () => {
+    // Save settings helper
+    function saveSettings() {
         const targetLang = targetLangSelect.value;
         const enabled = enableTranslationCheckbox.checked;
+        const showTranslatedSubtitle = showTranslatedSubtitleCheckbox.checked;
         const geminiApiKey = apiKeyInput.value.trim();
         const geminiModel = geminiModelSelect.value;
         const translationProvider = providerSelect.value;
         const glossary = glossaryInput.value;
         const status = document.getElementById('status');
 
-        chrome.storage.sync.set({ targetLang, enabled, geminiApiKey, geminiModel, translationProvider, glossary }, () => {
-            status.textContent = 'Settings saved!';
-            setTimeout(() => {
-                status.textContent = '';
-                // Notify content script to update settings
-                chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-                    if (tabs[0]) {
-                        chrome.tabs.sendMessage(tabs[0].id, {
-                            action: 'updateSettings',
-                            settings: { targetLang, enabled }
-                        });
-                    }
-                });
-                window.close();
-            }, 2000);
+        chrome.storage.sync.set({ targetLang, enabled, showTranslatedSubtitle, geminiApiKey, geminiModel, translationProvider, glossary }, () => {
+            // Only show status if triggered by button
+            if (status) {
+                status.textContent = 'Settings saved!';
+                setTimeout(() => {
+                    status.textContent = '';
+                }, 2000);
+            }
+
+            // Notify content script to update settings
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: 'updateSettings',
+                        settings: { targetLang, enabled, showTranslatedSubtitle }
+                    });
+                }
+            });
         });
+    }
+
+    // Auto-save on toggle
+    enableTranslationCheckbox.addEventListener('change', saveSettings);
+    showTranslatedSubtitleCheckbox.addEventListener('change', saveSettings);
+
+    // Save settings button
+    saveBtn.addEventListener('click', () => {
+        saveSettings();
+        setTimeout(() => window.close(), 500); // Close after short delay
     });
 });
