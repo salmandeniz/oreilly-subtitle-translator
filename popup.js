@@ -14,9 +14,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const refreshModelsBtn = document.getElementById('refreshModelsBtn');
 
     const showTranslatedSubtitleCheckbox = document.getElementById('showTranslatedSubtitle');
+    const unknownWordsList = document.getElementById('unknownWordsList');
+    const clearUnknownWordsBtn = document.getElementById('clearUnknownWordsBtn');
+
+    let unknownWords = [];
 
     // Load settings
-    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle'], (result) => {
+    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle', 'unknownWords'], (result) => {
         if (result.targetLang) {
             targetLangSelect.value = result.targetLang;
         }
@@ -34,6 +38,10 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         if (result.glossary) {
             glossaryInput.value = result.glossary;
+        }
+        if (result.unknownWords) {
+            unknownWords = result.unknownWords;
+            renderUnknownWords();
         }
 
         // Toggle Gemini config visibility
@@ -297,5 +305,67 @@ document.addEventListener('DOMContentLoaded', () => {
     saveBtn.addEventListener('click', () => {
         saveSettings();
         setTimeout(() => window.close(), 500); // Close after short delay
+    });
+
+    // Unknown words management
+    function renderUnknownWords() {
+        unknownWordsList.innerHTML = '';
+
+        if (unknownWords.length === 0) {
+            return; // CSS will show "No unknown words yet"
+        }
+
+        unknownWords.sort().forEach(word => {
+            const chip = document.createElement('div');
+            chip.className = 'word-chip';
+
+            const wordText = document.createElement('span');
+            wordText.textContent = word;
+
+            const removeBtn = document.createElement('span');
+            removeBtn.className = 'word-chip-remove';
+            removeBtn.textContent = '×';
+            removeBtn.onclick = () => removeUnknownWord(word);
+
+            chip.appendChild(wordText);
+            chip.appendChild(removeBtn);
+            unknownWordsList.appendChild(chip);
+        });
+    }
+
+    function removeUnknownWord(word) {
+        unknownWords = unknownWords.filter(w => w !== word);
+        chrome.storage.sync.set({ unknownWords });
+        renderUnknownWords();
+
+        // Notify content script
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+            if (tabs[0]) {
+                chrome.tabs.sendMessage(tabs[0].id, {
+                    action: 'updateUnknownWords',
+                    unknownWords: unknownWords
+                });
+            }
+        });
+    }
+
+    clearUnknownWordsBtn.addEventListener('click', () => {
+        if (unknownWords.length === 0) return;
+
+        if (confirm('Clear all unknown words?')) {
+            unknownWords = [];
+            chrome.storage.sync.set({ unknownWords });
+            renderUnknownWords();
+
+            // Notify content script
+            chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+                if (tabs[0]) {
+                    chrome.tabs.sendMessage(tabs[0].id, {
+                        action: 'updateUnknownWords',
+                        unknownWords: []
+                    });
+                }
+            });
+        }
     });
 });

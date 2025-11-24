@@ -216,6 +216,49 @@
             background-color: #2d2d2d;
             color: #888;
         }
+
+        .unknown-words-list {
+            min-height: 60px;
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: var(--secondary-bg);
+            border: 1px solid #444;
+            border-radius: 6px;
+            padding: 8px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .unknown-words-list:empty::before {
+            content: 'No unknown words yet';
+            color: #666;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .word-chip {
+            display: inline-flex;
+            align-items: center;
+            background-color: #ff9800;
+            color: #1a1a1a;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            gap: 6px;
+        }
+
+        .word-chip-remove {
+            cursor: pointer;
+            font-weight: bold;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+
+        .word-chip-remove:hover {
+            opacity: 1;
+        }
     </style>
 </head>
 
@@ -298,6 +341,15 @@
                 <span class="slider"></span>
             </label>
         </div>
+    </div>
+
+    <div class="control-group">
+        <label>Unknown Words</label>
+        <div id="unknownWordsList" class="unknown-words-list"></div>
+        <button id="clearUnknownWordsBtn"
+            style="margin-top: 10px; background-color: #666; font-size: 12px; padding: 8px;">Clear All Unknown
+            Words</button>
+        <div class="help-text">Right-click words in subtitles to mark/unmark as unknown</div>
     </div>
 
     <button id="saveBtn">Save Settings</button>

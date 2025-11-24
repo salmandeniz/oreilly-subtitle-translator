@@ -60,6 +60,19 @@
     background-color: rgba(255, 255, 255, 0.1);
 }
 
+/* Unknown word styles */
+.interactive-word.unknown {
+    color: #ff9800;
+    /* Orange for unknown words */
+    font-weight: 600;
+}
+
+.interactive-word.unknown:hover {
+    color: #ff6d00;
+    /* Darker orange on hover */
+    background-color: rgba(255, 152, 0, 0.1);
+}
+
 /* Translated Subtitle (Secondary) */
 .oreilly-translated-subtitle {
     display: block;

@@ -21,13 +21,15 @@ let dragStartY = 0;
 let initialLeft = 0;
 let initialTop = 0;
 let savedPosition = null;
+let unknownWords = new Set(); // Track words marked as unknown
 
 // Load settings
-chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle'], (result) => {
+chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords'], (result) => {
     if (result.targetLang) targetLang = result.targetLang;
     if (result.enabled !== undefined) translationEnabled = result.enabled;
     if (result.showTranslatedSubtitle !== undefined) showTranslatedSubtitle = result.showTranslatedSubtitle;
     if (result.overlayPosition) savedPosition = result.overlayPosition;
+    if (result.unknownWords) unknownWords = new Set(result.unknownWords);
 });
 
 // Listen for settings updates
@@ -39,6 +41,9 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         translationEnabled = request.settings.enabled;
         if (request.settings.showTranslatedSubtitle !== undefined) {
             showTranslatedSubtitle = request.settings.showTranslatedSubtitle;
+        }
+        if (request.settings.unknownWords !== undefined) {
+            unknownWords = new Set(request.settings.unknownWords);
         }
 
         console.log('Current state:', { translationEnabled, showTranslatedSubtitle, currentSubtitleText });
@@ -73,6 +78,19 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
                 // Scenario: Translation was off, or no subtitle tracked. Force a scan.
                 console.log('No current subtitle tracked. Scanning for subtitles...');
                 scanForSubtitles(document.body);
+            }
+        }
+    } else if (request.action === 'updateUnknownWords') {
+        console.log('Received updateUnknownWords message:', request.unknownWords);
+        unknownWords = new Set(request.unknownWords);
+
+        // Refresh the current subtitle display to update colors
+        if (currentSubtitleText) {
+            if (showTranslatedSubtitle) {
+                const result = await translateText(currentSubtitleText);
+                showInteractiveSubtitle(currentSubtitleText, result?.translatedText || null);
+            } else {
+                showInteractiveSubtitle(currentSubtitleText, null);
             }
         }
     }
@@ -416,8 +434,19 @@ function showInteractiveSubtitle(text, translatedText) {
     words.forEach((word, index) => {
         const wordSpan = document.createElement('span');
         wordSpan.textContent = word;
-        wordSpan.className = 'interactive-word';
+
+        // Clean word for checking unknown status (remove punctuation)
+        const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
+
+        // Check if word is marked as unknown
+        if (cleanWord && unknownWords.has(cleanWord)) {
+            wordSpan.className = 'interactive-word unknown';
+        } else {
+            wordSpan.className = 'interactive-word';
+        }
+
         wordSpan.onclick = (e) => handleWordClick(e, word);
+        wordSpan.oncontextmenu = (e) => handleWordRightClick(e, word);
         wrapper.appendChild(wordSpan);
 
         // Add a space after each word (except the last one, though it doesn't hurt)
@@ -458,6 +487,46 @@ async function handleWordClick(event, word) {
     if (result.translatedText) {
         showTooltip(event.target, result.translatedText);
     }
+}
+
+function handleWordRightClick(event, word) {
+    event.preventDefault(); // Prevent default context menu
+
+    // Clean the word (remove punctuation)
+    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
+    if (!cleanWord) return;
+
+    // Toggle unknown status
+    if (unknownWords.has(cleanWord)) {
+        unknownWords.delete(cleanWord);
+    } else {
+        unknownWords.add(cleanWord);
+    }
+
+    // Save to storage
+    chrome.storage.sync.set({ unknownWords: Array.from(unknownWords) });
+
+    // Update the visual state immediately
+    if (unknownWords.has(cleanWord)) {
+        event.target.className = 'interactive-word unknown';
+    } else {
+        event.target.className = 'interactive-word';
+    }
+
+    // Update all instances of this word in the current subtitle
+    const allWordSpans = document.querySelectorAll('.interactive-word');
+    allWordSpans.forEach(span => {
+        const spanCleanWord = span.textContent.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
+        if (spanCleanWord === cleanWord) {
+            if (unknownWords.has(cleanWord)) {
+                span.className = 'interactive-word unknown';
+            } else {
+                span.className = 'interactive-word';
+            }
+        }
+    });
+
+    console.log('Word marked as', unknownWords.has(cleanWord) ? 'unknown' : 'known', ':', cleanWord);
 }
 
 function showTooltip(targetElement, text) {
