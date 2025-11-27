@@ -534,23 +534,26 @@ function handleWordRightClick(event, word) {
     console.log('Word marked as', unknownWords.has(cleanWord) ? 'unknown' : 'known', ':', cleanWord);
 }
 
-function addToGlossary(word) {
+async function addToGlossary(word) {
     const glossaryArray = glossary ? glossary.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
+    const isRemoving = glossaryArray.includes(word);
 
-    if (glossaryArray.includes(word)) {
+    if (isRemoving) {
         const index = glossaryArray.indexOf(word);
         glossaryArray.splice(index, 1);
-        glossary = glossaryArray.join(', ');
-        chrome.storage.sync.set({ glossary });
         console.log('Word removed from glossary:', word);
-        return;
+    } else {
+        glossaryArray.push(word);
+        console.log('Word added to glossary:', word);
     }
 
-    glossaryArray.push(word);
     glossary = glossaryArray.join(', ');
-
     chrome.storage.sync.set({ glossary });
-    console.log('Word added to glossary:', word);
+
+    if (currentSubtitleText && showTranslatedSubtitle) {
+        const result = await translateText(currentSubtitleText);
+        showInteractiveSubtitle(currentSubtitleText, result?.translatedText || null);
+    }
 }
 
 function handleWordHover(event, word) {
