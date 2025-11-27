@@ -24,14 +24,16 @@ let savedPosition = null;
 let unknownWords = new Set();
 let translationCache = {};
 let hoverDebounceTimer = null;
+let glossary = '';
 
 // Load settings
-chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords'], (result) => {
+chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords', 'glossary'], (result) => {
     if (result.targetLang) targetLang = result.targetLang;
     if (result.enabled !== undefined) translationEnabled = result.enabled;
     if (result.showTranslatedSubtitle !== undefined) showTranslatedSubtitle = result.showTranslatedSubtitle;
     if (result.overlayPosition) savedPosition = result.overlayPosition;
     if (result.unknownWords) unknownWords = new Set(result.unknownWords);
+    if (result.glossary) glossary = result.glossary;
 });
 
 // Listen for settings updates
@@ -493,30 +495,30 @@ async function handleWordClick(event, word) {
 }
 
 function handleWordRightClick(event, word) {
-    event.preventDefault(); // Prevent default context menu
+    event.preventDefault();
 
-    // Clean the word (remove punctuation)
     const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
     if (!cleanWord) return;
 
-    // Toggle unknown status
+    if (event.metaKey) {
+        addToGlossary(cleanWord);
+        return;
+    }
+
     if (unknownWords.has(cleanWord)) {
         unknownWords.delete(cleanWord);
     } else {
         unknownWords.add(cleanWord);
     }
 
-    // Save to storage
     chrome.storage.sync.set({ unknownWords: Array.from(unknownWords) });
 
-    // Update the visual state immediately
     if (unknownWords.has(cleanWord)) {
         event.target.className = 'interactive-word unknown';
     } else {
         event.target.className = 'interactive-word';
     }
 
-    // Update all instances of this word in the current subtitle
     const allWordSpans = document.querySelectorAll('.interactive-word');
     allWordSpans.forEach(span => {
         const spanCleanWord = span.textContent.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
@@ -530,6 +532,25 @@ function handleWordRightClick(event, word) {
     });
 
     console.log('Word marked as', unknownWords.has(cleanWord) ? 'unknown' : 'known', ':', cleanWord);
+}
+
+function addToGlossary(word) {
+    const glossaryArray = glossary ? glossary.split(',').map(s => s.trim()).filter(s => s.length > 0) : [];
+
+    if (glossaryArray.includes(word)) {
+        const index = glossaryArray.indexOf(word);
+        glossaryArray.splice(index, 1);
+        glossary = glossaryArray.join(', ');
+        chrome.storage.sync.set({ glossary });
+        console.log('Word removed from glossary:', word);
+        return;
+    }
+
+    glossaryArray.push(word);
+    glossary = glossaryArray.join(', ');
+
+    chrome.storage.sync.set({ glossary });
+    console.log('Word added to glossary:', word);
 }
 
 function handleWordHover(event, word) {
@@ -654,7 +675,10 @@ if (typeof module !== 'undefined' && module.exports) {
         handleWordHover,
         handleWordHoverEnd,
         hideTooltip,
+        addToGlossary,
         get translationCache() { return translationCache; },
-        set translationCache(val) { translationCache = val; }
+        set translationCache(val) { translationCache = val; },
+        get glossary() { return glossary; },
+        set glossary(val) { glossary = val; }
     };
 }

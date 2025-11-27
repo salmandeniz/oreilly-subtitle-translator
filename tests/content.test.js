@@ -235,4 +235,71 @@ describe('Content Script', () => {
             expect(worldWord.onmouseleave).toBeFalsy();
         });
     });
+
+    describe('addToGlossary', () => {
+        beforeEach(() => {
+            content.glossary = '';
+        });
+
+        test('given_emptyGlossary_when_addWord_then_addsWordToGlossary', () => {
+            content.addToGlossary('react');
+
+            expect(content.glossary).toBe('react');
+            expect(chrome.storage.sync.set).toHaveBeenCalledWith({ glossary: 'react' });
+        });
+
+        test('given_existingGlossary_when_addWord_then_appendsWord', () => {
+            content.glossary = 'react, state';
+
+            content.addToGlossary('props');
+
+            expect(content.glossary).toBe('react, state, props');
+            expect(chrome.storage.sync.set).toHaveBeenCalledWith({ glossary: 'react, state, props' });
+        });
+
+        test('given_wordAlreadyInGlossary_when_addWord_then_removesFromGlossary', () => {
+            content.glossary = 'react, state';
+
+            content.addToGlossary('react');
+
+            expect(content.glossary).toBe('state');
+            expect(chrome.storage.sync.set).toHaveBeenCalledWith({ glossary: 'state' });
+        });
+    });
+
+    describe('handleWordRightClick with Cmd key', () => {
+        test('given_cmdKeyPressed_when_rightClick_then_addsToGlossary', () => {
+            content.glossary = '';
+            const mockEvent = {
+                preventDefault: jest.fn(),
+                metaKey: true,
+                target: document.createElement('span')
+            };
+            mockEvent.target.className = 'interactive-word';
+            mockEvent.target.textContent = 'hello';
+
+            content.handleWordRightClick(mockEvent, 'Hello');
+
+            expect(mockEvent.preventDefault).toHaveBeenCalled();
+            expect(content.glossary).toBe('hello');
+            expect(chrome.storage.sync.set).toHaveBeenCalledWith({ glossary: 'hello' });
+        });
+
+        test('given_noCmdKey_when_rightClick_then_togglesUnknownStatus', () => {
+            const mockEvent = {
+                preventDefault: jest.fn(),
+                metaKey: false,
+                target: document.createElement('span')
+            };
+            mockEvent.target.className = 'interactive-word';
+            mockEvent.target.textContent = 'newword';
+
+            content.handleWordRightClick(mockEvent, 'NewWord');
+
+            expect(mockEvent.target.className).toContain('unknown');
+            expect(chrome.storage.sync.set).toHaveBeenCalledWith(
+                expect.objectContaining({ unknownWords: expect.arrayContaining(['newword']) })
+            );
+        });
+    });
 });
