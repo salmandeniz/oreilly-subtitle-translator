@@ -21,7 +21,9 @@ let dragStartY = 0;
 let initialLeft = 0;
 let initialTop = 0;
 let savedPosition = null;
-let unknownWords = new Set(); // Track words marked as unknown
+let unknownWords = new Set();
+let translationCache = {};
+let hoverDebounceTimer = null;
 
 // Load settings
 chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords'], (result) => {
@@ -438,9 +440,10 @@ function showInteractiveSubtitle(text, translatedText) {
         // Clean word for checking unknown status (remove punctuation)
         const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
 
-        // Check if word is marked as unknown
         if (cleanWord && unknownWords.has(cleanWord)) {
             wordSpan.className = 'interactive-word unknown';
+            wordSpan.onmouseenter = (e) => handleWordHover(e, word);
+            wordSpan.onmouseleave = () => handleWordHoverEnd();
         } else {
             wordSpan.className = 'interactive-word';
         }
@@ -529,6 +532,44 @@ function handleWordRightClick(event, word) {
     console.log('Word marked as', unknownWords.has(cleanWord) ? 'unknown' : 'known', ':', cleanWord);
 }
 
+function handleWordHover(event, word) {
+    if (hoverDebounceTimer) {
+        clearTimeout(hoverDebounceTimer);
+    }
+
+    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
+    if (!cleanWord) return;
+
+    hoverDebounceTimer = setTimeout(async () => {
+        if (translationCache[cleanWord]) {
+            showTooltip(event.target, translationCache[cleanWord]);
+            return;
+        }
+
+        event.target.style.opacity = '0.7';
+        const result = await translateText(cleanWord);
+        event.target.style.opacity = '1';
+
+        if (result.translatedText) {
+            translationCache[cleanWord] = result.translatedText;
+            showTooltip(event.target, result.translatedText);
+        }
+    }, 300);
+}
+
+function handleWordHoverEnd() {
+    if (hoverDebounceTimer) {
+        clearTimeout(hoverDebounceTimer);
+        hoverDebounceTimer = null;
+    }
+    hideTooltip();
+}
+
+function hideTooltip() {
+    const existingTooltip = document.querySelector('.oreilly-translation-tooltip');
+    if (existingTooltip) existingTooltip.remove();
+}
+
 function showTooltip(targetElement, text) {
     const tooltip = document.createElement('div');
     tooltip.className = 'oreilly-translation-tooltip';
@@ -609,6 +650,11 @@ if (typeof module !== 'undefined' && module.exports) {
         scanForSubtitles,
         checkNode,
         handleWordClick,
-        handleWordRightClick
+        handleWordRightClick,
+        handleWordHover,
+        handleWordHoverEnd,
+        hideTooltip,
+        get translationCache() { return translationCache; },
+        set translationCache(val) { translationCache = val; }
     };
 }

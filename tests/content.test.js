@@ -103,7 +103,6 @@ describe('Content Script', () => {
             node.className = 'caption';
             node.textContent = 'Subtitle Text';
 
-            // Mock translateText
             chrome.runtime.sendMessage.mockImplementation((message, callback) => {
                 callback({ translatedText: 'Translated', provider: 'gemini' });
             });
@@ -111,10 +110,129 @@ describe('Content Script', () => {
             await content.checkNode(node);
 
             expect(node.style.visibility).toBe('hidden');
-            // Should have called showInteractiveSubtitle, checking DOM
             const overlay = document.getElementById('oreilly-subtitle-overlay');
             expect(overlay).toBeTruthy();
             expect(overlay.textContent).toContain('Subtitle');
+        });
+    });
+
+    describe('handleWordHover', () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
+            content.translationCache = {};
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
+        test('given_cachedTranslation_when_hover_then_showsTooltipImmediately', async () => {
+            const mockEvent = {
+                target: document.createElement('span')
+            };
+            document.body.appendChild(mockEvent.target);
+            content.translationCache['hello'] = 'merhaba';
+
+            content.handleWordHover(mockEvent, 'Hello');
+            jest.advanceTimersByTime(300);
+
+            const tooltip = document.querySelector('.oreilly-translation-tooltip');
+            expect(tooltip).toBeTruthy();
+            expect(tooltip.textContent).toBe('merhaba');
+        });
+
+        test('given_noCachedTranslation_when_hover_then_fetchesAndCachesTranslation', async () => {
+            jest.useRealTimers();
+
+            const mockEvent = {
+                target: document.createElement('span')
+            };
+            document.body.appendChild(mockEvent.target);
+
+            chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+                callback({ translatedText: 'mundo', provider: 'gemini' });
+            });
+
+            content.handleWordHover(mockEvent, 'World');
+
+            await new Promise(r => setTimeout(r, 350));
+
+            expect(content.translationCache['world']).toBe('mundo');
+        });
+
+        test('given_hoverWithDebounce_when_mouseLeaveBeforeTimeout_then_noTooltipShown', () => {
+            const mockEvent = {
+                target: document.createElement('span')
+            };
+            document.body.appendChild(mockEvent.target);
+
+            content.handleWordHover(mockEvent, 'Hello');
+            jest.advanceTimersByTime(100);
+            content.handleWordHoverEnd();
+            jest.advanceTimersByTime(300);
+
+            const tooltip = document.querySelector('.oreilly-translation-tooltip');
+            expect(tooltip).toBeFalsy();
+        });
+    });
+
+    describe('handleWordHoverEnd', () => {
+        test('given_tooltipVisible_when_hoverEnd_then_hidesAndRemovesTooltip', () => {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'oreilly-translation-tooltip';
+            document.body.appendChild(tooltip);
+
+            content.handleWordHoverEnd();
+
+            const remainingTooltip = document.querySelector('.oreilly-translation-tooltip');
+            expect(remainingTooltip).toBeFalsy();
+        });
+    });
+
+    describe('hideTooltip', () => {
+        test('given_tooltipExists_when_hideTooltip_then_removesFromDom', () => {
+            const tooltip = document.createElement('div');
+            tooltip.className = 'oreilly-translation-tooltip';
+            document.body.appendChild(tooltip);
+
+            content.hideTooltip();
+
+            expect(document.querySelector('.oreilly-translation-tooltip')).toBeFalsy();
+        });
+    });
+
+    describe('showInteractiveSubtitle with unknown words hover', () => {
+        beforeEach(() => {
+            chrome.storage.sync.set({ unknownWords: ['hello'] });
+        });
+
+        test('given_unknownWord_when_showInteractiveSubtitle_then_hasHoverListeners', () => {
+            content.handleWordRightClick({
+                preventDefault: jest.fn(),
+                target: document.createElement('span')
+            }, 'Hello');
+
+            content.showInteractiveSubtitle('Hello World', null);
+
+            const overlay = document.getElementById('oreilly-subtitle-overlay');
+            const words = overlay.querySelectorAll('.interactive-word');
+            const helloWord = Array.from(words).find(w => w.textContent === 'Hello');
+
+            expect(helloWord.className).toContain('unknown');
+            expect(helloWord.onmouseenter).toBeTruthy();
+            expect(helloWord.onmouseleave).toBeTruthy();
+        });
+
+        test('given_regularWord_when_showInteractiveSubtitle_then_noHoverListeners', () => {
+            content.showInteractiveSubtitle('World', null);
+
+            const overlay = document.getElementById('oreilly-subtitle-overlay');
+            const words = overlay.querySelectorAll('.interactive-word');
+            const worldWord = Array.from(words).find(w => w.textContent === 'World');
+
+            expect(worldWord.className).not.toContain('unknown');
+            expect(worldWord.onmouseenter).toBeFalsy();
+            expect(worldWord.onmouseleave).toBeFalsy();
         });
     });
 });
