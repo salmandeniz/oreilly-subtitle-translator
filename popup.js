@@ -371,6 +371,12 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => window.close(), 500);
     });
 
+    const saveBtnAI = document.getElementById('saveBtnAI');
+    saveBtnAI.addEventListener('click', () => {
+        saveSettings();
+        setTimeout(() => window.close(), 500);
+    });
+
     // Unknown words management
     function renderUnknownWords() {
         unknownWordsList.innerHTML = '';

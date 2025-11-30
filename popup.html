@@ -303,6 +303,7 @@
     <div class="tabs">
         <button type="button" class="tab-btn active" data-tab="main">Main</button>
         <button type="button" class="tab-btn" data-tab="appearance">Appearance</button>
+        <button type="button" class="tab-btn" data-tab="ai">AI</button>
     </div>
 
     <div id="main-tab" class="tab-content active">
@@ -323,48 +324,9 @@
         </div>
 
         <div class="control-group">
-            <label for="provider">Translation Provider</label>
-            <select id="provider">
-                <option value="auto">Auto (Gemini if available)</option>
-                <option value="gemini">Gemini AI</option>
-                <option value="google">Google Translate</option>
-            </select>
-        </div>
-
-        <div class="control-group">
             <label for="glossary">Glossary (Comma separated words to keep untranslated)</label>
             <textarea id="glossary" rows="3" placeholder="e.g. React, State, Props"></textarea>
         </div>
-
-        <div class="control-group" id="geminiConfig">
-            <label for="apiKey">Gemini API Key (Optional)</label>
-            <div style="position: relative;">
-                <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
-                <button type="button" id="toggleApiKey" class="toggle-visibility">👁️</button>
-            </div>
-
-            <div style="margin-top: 15px;">
-                <label for="geminiModel">Gemini Model</label>
-                <div style="display: flex; gap: 8px;">
-                    <select id="geminiModel" style="flex-grow: 1;">
-                        <option value="gemini-1.5-flash-001">gemini-1.5-flash-001 (Default)</option>
-                    </select>
-                    <button type="button" id="refreshModelsBtn" style="width: auto; padding: 0 10px; font-size: 16px;"
-                        title="Refresh Models">🔄</button>
-                </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-top: 15px;">
-                <button type="button" id="testConnectionBtn"
-                    style="padding: 8px; font-size: 12px; background-color: #333;">Test Connection</button>
-            </div>
-            <div id="testStatus" style="margin-top: 5px; font-size: 12px;"></div>
-            <div class="help-text">
-                Get your free API key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
-            </div>
-        </div>
-
-        <div id="providerStatus" class="provider-status"></div>
 
         <div class="control-group">
             <div class="toggle-container">
@@ -440,6 +402,50 @@
 
         <button id="saveBtnAppearance">Save Settings</button>
         <div id="statusAppearance" class="status"></div>
+    </div>
+
+    <div id="ai-tab" class="tab-content">
+        <div class="control-group">
+            <label for="provider">Translation Provider</label>
+            <select id="provider">
+                <option value="auto">Auto (Gemini if available)</option>
+                <option value="gemini">Gemini AI</option>
+                <option value="google">Google Translate</option>
+            </select>
+        </div>
+
+        <div class="control-group" id="geminiConfig">
+            <label for="apiKey">Gemini API Key (Optional)</label>
+            <div style="position: relative;">
+                <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
+                <button type="button" id="toggleApiKey" class="toggle-visibility">👁️</button>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <label for="geminiModel">Gemini Model</label>
+                <div style="display: flex; gap: 8px;">
+                    <select id="geminiModel" style="flex-grow: 1;">
+                        <option value="gemini-1.5-flash-001">gemini-1.5-flash-001 (Default)</option>
+                    </select>
+                    <button type="button" id="refreshModelsBtn" style="width: auto; padding: 0 10px; font-size: 16px;"
+                        title="Refresh Models">🔄</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button type="button" id="testConnectionBtn"
+                    style="padding: 8px; font-size: 12px; background-color: #333;">Test Connection</button>
+            </div>
+            <div id="testStatus" style="margin-top: 5px; font-size: 12px;"></div>
+            <div class="help-text">
+                Get your free API key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+            </div>
+        </div>
+
+        <div id="providerStatus" class="provider-status"></div>
+
+        <button id="saveBtnAI">Save Settings</button>
+        <div id="statusAI" class="status"></div>
     </div>
 
     <script src="popup.js"></script>
