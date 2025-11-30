@@ -16,11 +16,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const showTranslatedSubtitleCheckbox = document.getElementById('showTranslatedSubtitle');
     const unknownWordsList = document.getElementById('unknownWordsList');
     const clearUnknownWordsBtn = document.getElementById('clearUnknownWordsBtn');
+    const mergeDelaySlider = document.getElementById('mergeDelay');
+    const mergeDelayValue = document.getElementById('mergeDelayValue');
 
     let unknownWords = [];
 
+    mergeDelaySlider.addEventListener('input', () => {
+        mergeDelayValue.textContent = mergeDelaySlider.value;
+    });
+
     // Load settings
-    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle', 'unknownWords'], (result) => {
+    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle', 'unknownWords', 'mergeDelay'], (result) => {
         if (result.targetLang) {
             targetLangSelect.value = result.targetLang;
         }
@@ -42,6 +48,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result.unknownWords) {
             unknownWords = result.unknownWords;
             renderUnknownWords();
+        }
+        if (result.mergeDelay !== undefined) {
+            mergeDelaySlider.value = result.mergeDelay;
+            mergeDelayValue.textContent = result.mergeDelay;
         }
 
         // Toggle Gemini config visibility
@@ -274,9 +284,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const geminiModel = geminiModelSelect.value;
         const translationProvider = providerSelect.value;
         const glossary = glossaryInput.value;
+        const mergeDelay = parseInt(mergeDelaySlider.value, 10);
         const status = document.getElementById('status');
 
-        chrome.storage.sync.set({ targetLang, enabled, showTranslatedSubtitle, geminiApiKey, geminiModel, translationProvider, glossary }, () => {
+        chrome.storage.sync.set({ targetLang, enabled, showTranslatedSubtitle, geminiApiKey, geminiModel, translationProvider, glossary, mergeDelay }, () => {
             // Only show status if triggered by button
             if (status) {
                 status.textContent = 'Settings saved!';
@@ -290,7 +301,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (tabs[0]) {
                     chrome.tabs.sendMessage(tabs[0].id, {
                         action: 'updateSettings',
-                        settings: { targetLang, enabled, showTranslatedSubtitle }
+                        settings: { targetLang, enabled, showTranslatedSubtitle, mergeDelay }
                     });
                 }
             });
@@ -300,6 +311,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Auto-save on toggle
     enableTranslationCheckbox.addEventListener('change', saveSettings);
     showTranslatedSubtitleCheckbox.addEventListener('change', saveSettings);
+    mergeDelaySlider.addEventListener('change', saveSettings);
 
     // Save settings button
     saveBtn.addEventListener('click', () => {

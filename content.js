@@ -11,6 +11,17 @@ function isExtensionContextValid() {
     }
 }
 
+function clearSingleSelection(options = {}) {
+    if (!singleSelectedElement) return;
+
+    singleSelectedElement.classList.remove('single-selected');
+    singleSelectedElement = null;
+
+    if (!options.skipTooltip) {
+        hideTooltip();
+    }
+}
+
 let targetLang = 'tr';
 let translationEnabled = true;
 let showTranslatedSubtitle = false;
@@ -25,15 +36,39 @@ let unknownWords = new Set();
 let translationCache = {};
 let hoverDebounceTimer = null;
 let glossary = '';
+let subtitleDebounceTimer = null;
+let textTrackObserverActive = false;
+let cueBuffer = '';
+let cueBufferTimer = null;
+let domSubtitleBuffer = '';
+let lastDisplayedText = '';
+let lastDisplayTime = 0;
+let continuationThreshold = 5000;
+let multiSelectSelection = [];
+let singleSelectedElement = null;
+
+function constrainOverlayToViewport() {
+    const overlay = document.getElementById('oreilly-subtitle-overlay');
+    if (!overlay || !savedPosition || savedPosition.topPercent === undefined) return;
+
+    const viewportHeight = window.innerHeight;
+    const overlayHeight = overlay.offsetHeight || 100;
+    const calculatedTop = savedPosition.topPercent * viewportHeight;
+    const maxTop = viewportHeight - overlayHeight;
+    const constrainedTop = Math.max(0, Math.min(calculatedTop, maxTop));
+
+    overlay.style.top = constrainedTop + 'px';
+}
 
 // Load settings
-chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords', 'glossary'], (result) => {
+chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords', 'glossary', 'mergeDelay'], (result) => {
     if (result.targetLang) targetLang = result.targetLang;
     if (result.enabled !== undefined) translationEnabled = result.enabled;
     if (result.showTranslatedSubtitle !== undefined) showTranslatedSubtitle = result.showTranslatedSubtitle;
     if (result.overlayPosition) savedPosition = result.overlayPosition;
     if (result.unknownWords) unknownWords = new Set(result.unknownWords);
     if (result.glossary) glossary = result.glossary;
+    if (result.mergeDelay !== undefined) continuationThreshold = result.mergeDelay * 1000;
 });
 
 // Listen for settings updates
@@ -49,8 +84,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         if (request.settings.unknownWords !== undefined) {
             unknownWords = new Set(request.settings.unknownWords);
         }
+        if (request.settings.mergeDelay !== undefined) {
+            continuationThreshold = request.settings.mergeDelay * 1000;
+        }
 
-        console.log('Current state:', { translationEnabled, showTranslatedSubtitle, currentSubtitleText });
+        console.log('Current state:', { translationEnabled, showTranslatedSubtitle, currentSubtitleText, continuationThreshold });
 
         // Clear current overlay if disabled
         if (!translationEnabled) {
@@ -141,13 +179,18 @@ function createOverlay() {
     }
 
 
-    // Adjust positioning strategy based on container
-    if (savedPosition) {
-        overlay.style.position = 'fixed'; // Use fixed for dragged element to be safe
-        overlay.style.left = '50%'; // Force center
-        overlay.style.top = savedPosition.top;
+    if (savedPosition && savedPosition.topPercent !== undefined) {
+        const viewportHeight = window.innerHeight;
+        const overlayHeight = overlay.offsetHeight || 100;
+        const calculatedTop = savedPosition.topPercent * viewportHeight;
+        const maxTop = viewportHeight - overlayHeight;
+        const constrainedTop = Math.max(0, Math.min(calculatedTop, maxTop));
+
+        overlay.style.position = 'fixed';
+        overlay.style.left = '50%';
+        overlay.style.top = constrainedTop + 'px';
         overlay.style.bottom = 'auto';
-        overlay.style.transform = 'translateX(-50%)'; // Force center transform
+        overlay.style.transform = 'translateX(-50%)';
     } else if (container === document.body) {
         overlay.style.position = 'fixed';
         overlay.style.bottom = '100px'; // Higher up for fixed position to avoid bottom bars
@@ -202,9 +245,10 @@ function createOverlay() {
             isDragging = false;
             overlay.style.cursor = 'move';
 
-            // Save position
+            const currentTop = parseInt(overlay.style.top, 10);
+            const viewportHeight = window.innerHeight;
             savedPosition = {
-                top: overlay.style.top
+                topPercent: currentTop / viewportHeight
             };
             chrome.storage.sync.set({ overlayPosition: savedPosition });
         });
@@ -217,15 +261,34 @@ function createOverlay() {
 document.addEventListener('fullscreenchange', () => {
     const overlay = document.getElementById('oreilly-subtitle-overlay');
     if (overlay && currentSubtitleText) {
-        // Re-append to correct container
         createOverlay();
+        constrainOverlayToViewport();
     }
+});
+
+window.addEventListener('resize', () => {
+    constrainOverlayToViewport();
 });
 
 function removeOverlay() {
     const overlay = document.getElementById('oreilly-subtitle-overlay');
     if (overlay) {
         overlay.style.display = 'none';
+    }
+}
+
+function clearMultiSelection(options = {}) {
+    if (multiSelectSelection.length === 0) return;
+
+    multiSelectSelection.forEach(({ element }) => {
+        if (element && element.classList) {
+            element.classList.remove('multi-selected');
+        }
+    });
+    multiSelectSelection = [];
+
+    if (!options.skipTooltip) {
+        hideTooltip();
     }
 }
 
@@ -390,27 +453,63 @@ async function checkNode(target) {
     }
 
     if (isSubtitle && text && text.trim().length > 0) {
-        // Hide the native subtitle element
         if (target.nodeType === Node.ELEMENT_NODE) {
             target.style.visibility = 'hidden';
         } else if (target.nodeType === Node.TEXT_NODE && target.parentElement) {
             target.parentElement.style.visibility = 'hidden';
         }
 
-        if (text !== currentSubtitleText) {
-            console.log('Subtitle detected:', text);
-            currentSubtitleText = text;
-
-            let translatedText = null;
-            if (showTranslatedSubtitle) {
-                const result = await translateText(text);
-                if (result && result.translatedText) {
-                    translatedText = result.translatedText;
-                }
+        const trimmedText = text.trim();
+        if (!domSubtitleBuffer.includes(trimmedText)) {
+            if (subtitleDebounceTimer) {
+                clearTimeout(subtitleDebounceTimer);
             }
 
-            // Show interactive subtitle immediately with original text, and potentially translated text
-            showInteractiveSubtitle(text, translatedText);
+            if (domSubtitleBuffer && !domSubtitleBuffer.endsWith(' ')) {
+                domSubtitleBuffer += ' ';
+            }
+            domSubtitleBuffer += trimmedText;
+
+            subtitleDebounceTimer = setTimeout(async () => {
+                if (textTrackObserverActive) {
+                    domSubtitleBuffer = '';
+                    return;
+                }
+
+                let combinedText = domSubtitleBuffer.trim();
+                domSubtitleBuffer = '';
+
+                if (combinedText && combinedText !== currentSubtitleText) {
+                    const now = Date.now();
+                    const timeSinceLastDisplay = now - lastDisplayTime;
+                    const lastChar = lastDisplayedText.slice(-1);
+                    const firstChar = combinedText.charAt(0);
+                    const isContinuation = timeSinceLastDisplay < continuationThreshold &&
+                        lastDisplayedText &&
+                        (lastChar === ',' || lastChar === ' ' || !lastChar.match(/[.!?]/) && firstChar === firstChar.toLowerCase());
+
+                    if (isContinuation) {
+                        combinedText = lastDisplayedText + ' ' + combinedText;
+                        console.log('Subtitle continuation detected, combined:', combinedText);
+                    } else {
+                        console.log('Subtitle detected:', combinedText);
+                    }
+
+                    currentSubtitleText = combinedText;
+                    lastDisplayedText = combinedText;
+                    lastDisplayTime = now;
+
+                    let translatedText = null;
+                    if (showTranslatedSubtitle) {
+                        const result = await translateText(combinedText);
+                        if (result && result.translatedText) {
+                            translatedText = result.translatedText;
+                        }
+                    }
+
+                    showInteractiveSubtitle(combinedText, translatedText);
+                }
+            }, 400);
         }
     } else if (isSubtitle) {
         // Ensure native subtitles are hidden even if text hasn't changed
@@ -426,6 +525,8 @@ function showInteractiveSubtitle(text, translatedText) {
     if (!translationEnabled || !text) return;
 
     const overlay = createOverlay();
+    clearMultiSelection({ skipTooltip: true });
+    clearSingleSelection({ skipTooltip: true });
     overlay.innerHTML = ''; // Clear previous content
 
     // Create wrapper for relative positioning
@@ -479,8 +580,46 @@ async function handleWordClick(event, word) {
     if (existingTooltip) existingTooltip.remove();
 
     // Clean the word (remove punctuation)
-    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "");
+    const cleanWord = word.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").trim();
     if (!cleanWord) return;
+
+    const isMultiSelectMode = event.metaKey;
+
+    clearSingleSelection({ skipTooltip: true });
+
+    if (!isMultiSelectMode) {
+        clearMultiSelection();
+    }
+
+    if (isMultiSelectMode) {
+        const target = event.target;
+        const existingIndex = multiSelectSelection.findIndex(item => item.element === target);
+        let translationAnchor = target;
+
+        if (existingIndex >= 0) {
+            multiSelectSelection[existingIndex].element.classList.remove('multi-selected');
+            multiSelectSelection.splice(existingIndex, 1);
+            translationAnchor = multiSelectSelection.length > 0 ? multiSelectSelection[multiSelectSelection.length - 1].element : null;
+        } else {
+            multiSelectSelection.push({ word: cleanWord, element: target });
+            target.classList.add('multi-selected');
+        }
+
+        if (multiSelectSelection.length === 0 || !translationAnchor) {
+            hideTooltip();
+            return;
+        }
+
+        translationAnchor.style.opacity = '0.7';
+        const combinedText = multiSelectSelection.map(item => item.word).join(' ');
+        const result = await translateText(combinedText);
+        translationAnchor.style.opacity = '1';
+
+        if (result.translatedText) {
+            showTooltip(translationAnchor, result.translatedText);
+        }
+        return;
+    }
 
     // Show loading state or immediate feedback if needed
     event.target.style.opacity = '0.7';
@@ -492,6 +631,9 @@ async function handleWordClick(event, word) {
     if (result.translatedText) {
         showTooltip(event.target, result.translatedText);
     }
+
+    event.target.classList.add('single-selected');
+    singleSelectedElement = event.target;
 }
 
 function handleWordRightClick(event, word) {
@@ -599,7 +741,8 @@ function showTooltip(targetElement, text) {
     tooltip.className = 'oreilly-translation-tooltip';
     tooltip.textContent = text;
 
-    document.body.appendChild(tooltip);
+    const container = document.fullscreenElement || document.body;
+    container.appendChild(tooltip);
 
     const rect = targetElement.getBoundingClientRect();
     const tooltipRect = tooltip.getBoundingClientRect();
@@ -625,6 +768,19 @@ function showTooltip(targetElement, text) {
     }, 100);
 }
 
+document.addEventListener('click', (event) => {
+    const interactiveWord = typeof event.target?.closest === 'function'
+        ? event.target.closest('.interactive-word')
+        : null;
+
+    if (interactiveWord) {
+        return;
+    }
+
+    clearSingleSelection();
+    clearMultiSelection();
+});
+
 function scanForSubtitles(node) {
     if (!node) return;
 
@@ -645,32 +801,158 @@ function scanForSubtitles(node) {
     }
 }
 
+function observeWithTextTrackAPI() {
+    const video = document.querySelector('video');
+    if (!video || !video.textTracks || video.textTracks.length === 0) {
+        return false;
+    }
+
+    let subtitleTrack = null;
+    for (let i = 0; i < video.textTracks.length; i++) {
+        const track = video.textTracks[i];
+        if (track.kind === 'subtitles' || track.kind === 'captions') {
+            subtitleTrack = track;
+            break;
+        }
+    }
+
+    if (!subtitleTrack) {
+        return false;
+    }
+
+    subtitleTrack.mode = 'hidden';
+
+    const processCueBuffer = async () => {
+        let combinedText = cueBuffer.trim();
+        cueBuffer = '';
+
+        if (combinedText && combinedText !== currentSubtitleText) {
+            const now = Date.now();
+            const timeSinceLastDisplay = now - lastDisplayTime;
+            const lastChar = lastDisplayedText.slice(-1);
+            const firstChar = combinedText.charAt(0);
+            const isContinuation = timeSinceLastDisplay < continuationThreshold &&
+                lastDisplayedText &&
+                (lastChar === ',' || lastChar === ' ' || !lastChar.match(/[.!?]/) && firstChar === firstChar.toLowerCase());
+
+            if (isContinuation) {
+                combinedText = lastDisplayedText + ' ' + combinedText;
+                console.log('TextTrack continuation detected, combined:', combinedText);
+            } else {
+                console.log('TextTrack subtitle:', combinedText);
+            }
+
+            currentSubtitleText = combinedText;
+            lastDisplayedText = combinedText;
+            lastDisplayTime = now;
+
+            let translatedText = null;
+            if (showTranslatedSubtitle) {
+                const result = await translateText(combinedText);
+                if (result && result.translatedText) {
+                    translatedText = result.translatedText;
+                }
+            }
+
+            showInteractiveSubtitle(combinedText, translatedText);
+        }
+    };
+
+    const handleCueChange = () => {
+        if (!isExtensionContextValid() || !translationEnabled) return;
+
+        if (subtitleTrack.activeCues && subtitleTrack.activeCues.length > 0) {
+            const currentCue = subtitleTrack.activeCues[0];
+            const text = currentCue.text;
+
+            if (text && text.trim().length > 0) {
+                if (cueBufferTimer) {
+                    clearTimeout(cueBufferTimer);
+                }
+
+                if (cueBuffer && !cueBuffer.endsWith(' ')) {
+                    cueBuffer += ' ';
+                }
+                cueBuffer += text.trim();
+
+                cueBufferTimer = setTimeout(processCueBuffer, 400);
+            }
+        }
+    };
+
+    subtitleTrack.addEventListener('cuechange', handleCueChange);
+
+    video.textTracks.addEventListener('addtrack', (e) => {
+        const track = e.track;
+        if (track.kind === 'subtitles' || track.kind === 'captions') {
+            track.mode = 'hidden';
+            track.addEventListener('cuechange', handleCueChange);
+        }
+    });
+
+    console.log("O'Reilly Translator: TextTrack API observer active with", subtitleTrack.cues ? subtitleTrack.cues.length : 0, "cues");
+    textTrackObserverActive = true;
+    return true;
+}
+
 function observeSubtitles() {
-    console.log("O'Reilly Translator: Starting observer and initial scan...");
+    console.log("O'Reilly Translator: Starting observer...");
 
-    // Start observing the main document
-    observeDOM(document.body);
-
-    // Scan for existing shadow roots and subtitles
-    scanForSubtitles(document.body);
+    if (observeWithTextTrackAPI()) {
+        console.log("O'Reilly Translator: Using TextTrack API (no fragment issue)");
+    } else {
+        console.log("O'Reilly Translator: TextTrack not available, using DOM observer with debounce");
+        observeDOM(document.body);
+        scanForSubtitles(document.body);
+    }
 
     console.log("O'Reilly Translator: Observer active.");
 }
 
-// Start observing
-// Use a shorter delay or check readyState
-if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    setTimeout(observeSubtitles, 1000);
-} else {
-    window.addEventListener('load', () => setTimeout(observeSubtitles, 1000));
+function startObserving() {
+    console.log("O'Reilly Translator: Starting observer...");
+
+    if (observeWithTextTrackAPI()) {
+        console.log("O'Reilly Translator: Using TextTrack API (no fragment issue)");
+        return;
+    }
+
+    console.log("O'Reilly Translator: TextTrack not available yet, using DOM observer with debounce");
+    observeDOM(document.body);
+    scanForSubtitles(document.body);
+
+    let retryCount = 0;
+    const maxRetries = 10;
+    const retryInterval = setInterval(() => {
+        retryCount++;
+        if (textTrackObserverActive || retryCount >= maxRetries) {
+            clearInterval(retryInterval);
+            if (textTrackObserverActive) {
+                console.log("O'Reilly Translator: Switched to TextTrack API");
+            } else {
+                console.log("O'Reilly Translator: TextTrack not available, continuing with DOM observer");
+            }
+            return;
+        }
+
+        if (observeWithTextTrackAPI()) {
+            console.log("O'Reilly Translator: TextTrack API now available, switching...");
+        }
+    }, 2000);
 }
 
-// Export for testing
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+    setTimeout(startObserving, 1000);
+} else {
+    window.addEventListener('load', () => setTimeout(startObserving, 1000));
+}
+
 if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         showInteractiveSubtitle,
         translateText,
         createOverlay,
+        constrainOverlayToViewport,
         scanForSubtitles,
         checkNode,
         handleWordClick,
@@ -679,9 +961,13 @@ if (typeof module !== 'undefined' && module.exports) {
         handleWordHoverEnd,
         hideTooltip,
         addToGlossary,
+        observeWithTextTrackAPI,
+        startObserving,
         get translationCache() { return translationCache; },
         set translationCache(val) { translationCache = val; },
         get glossary() { return glossary; },
-        set glossary(val) { glossary = val; }
+        set glossary(val) { glossary = val; },
+        get textTrackObserverActive() { return textTrackObserverActive; },
+        set textTrackObserverActive(val) { textTrackObserverActive = val; }
     };
 }

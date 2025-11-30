@@ -71,6 +71,62 @@ describe('Content Script', () => {
             const tooltip = document.querySelector('.oreilly-translation-tooltip');
             expect(tooltip).toBeTruthy();
             expect(tooltip.textContent).toBe('Merhaba');
+            expect(mockEvent.target.classList.contains('single-selected')).toBe(true);
+        });
+
+        test('Cmd+click accumulates words and translates combined text', async () => {
+            const firstTarget = document.createElement('span');
+            const secondTarget = document.createElement('span');
+            document.body.appendChild(firstTarget);
+            document.body.appendChild(secondTarget);
+
+            chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+                callback({ translatedText: `tr:${message.text}`, provider: 'gemini' });
+            });
+
+            await content.handleWordClick({ target: firstTarget, metaKey: true }, 'Hello');
+            await content.handleWordClick({ target: secondTarget, metaKey: true }, 'World');
+
+            expect(chrome.runtime.sendMessage).toHaveBeenLastCalledWith(
+                expect.objectContaining({ text: 'hello world' }),
+                expect.any(Function)
+            );
+
+            const tooltip = document.querySelector('.oreilly-translation-tooltip');
+            expect(tooltip).toBeTruthy();
+            expect(tooltip.textContent).toBe('tr:hello world');
+            expect(firstTarget.classList.contains('multi-selected')).toBe(true);
+            expect(secondTarget.classList.contains('multi-selected')).toBe(true);
+        });
+
+        test('clicking outside clears single and multi selections', async () => {
+            const singleTarget = document.createElement('span');
+            document.body.appendChild(singleTarget);
+
+            chrome.runtime.sendMessage.mockImplementation((message, callback) => {
+                callback({ translatedText: message.text, provider: 'gemini' });
+            });
+
+            await content.handleWordClick({ target: singleTarget }, 'Hello');
+            expect(singleTarget.classList.contains('single-selected')).toBe(true);
+
+            const multiFirst = document.createElement('span');
+            const multiSecond = document.createElement('span');
+            document.body.appendChild(multiFirst);
+            document.body.appendChild(multiSecond);
+
+            await content.handleWordClick({ target: multiFirst, metaKey: true }, 'Foo');
+            await content.handleWordClick({ target: multiSecond, metaKey: true }, 'Bar');
+            expect(multiFirst.classList.contains('multi-selected')).toBe(true);
+            expect(multiSecond.classList.contains('multi-selected')).toBe(true);
+
+            const outside = document.createElement('div');
+            document.body.appendChild(outside);
+            outside.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+            expect(singleTarget.classList.contains('single-selected')).toBe(false);
+            expect(multiFirst.classList.contains('multi-selected')).toBe(false);
+            expect(multiSecond.classList.contains('multi-selected')).toBe(false);
         });
     });
 
@@ -98,6 +154,14 @@ describe('Content Script', () => {
     });
 
     describe('checkNode', () => {
+        beforeEach(() => {
+            jest.useFakeTimers();
+        });
+
+        afterEach(() => {
+            jest.useRealTimers();
+        });
+
         test('detects subtitle class and updates display', async () => {
             const node = document.createElement('div');
             node.className = 'caption';
@@ -107,9 +171,13 @@ describe('Content Script', () => {
                 callback({ translatedText: 'Translated', provider: 'gemini' });
             });
 
-            await content.checkNode(node);
+            content.checkNode(node);
 
             expect(node.style.visibility).toBe('hidden');
+
+            jest.advanceTimersByTime(400);
+            await Promise.resolve();
+
             const overlay = document.getElementById('oreilly-subtitle-overlay');
             expect(overlay).toBeTruthy();
             expect(overlay.textContent).toContain('Subtitle');
