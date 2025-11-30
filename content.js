@@ -46,6 +46,10 @@ let lastDisplayTime = 0;
 let continuationThreshold = 5000;
 let multiSelectSelection = [];
 let singleSelectedElement = null;
+let fontFamily = 'Segoe UI';
+let fontSize = 18;
+let translatedFontFamily = 'Segoe UI';
+let translatedFontSize = 14;
 
 function constrainOverlayToViewport() {
     const overlay = document.getElementById('oreilly-subtitle-overlay');
@@ -61,7 +65,7 @@ function constrainOverlayToViewport() {
 }
 
 // Load settings
-chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords', 'glossary', 'mergeDelay'], (result) => {
+chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTranslatedSubtitle', 'unknownWords', 'glossary', 'mergeDelay', 'fontFamily', 'fontSize', 'translatedFontFamily', 'translatedFontSize'], (result) => {
     if (result.targetLang) targetLang = result.targetLang;
     if (result.enabled !== undefined) translationEnabled = result.enabled;
     if (result.showTranslatedSubtitle !== undefined) showTranslatedSubtitle = result.showTranslatedSubtitle;
@@ -69,6 +73,10 @@ chrome.storage.sync.get(['targetLang', 'enabled', 'overlayPosition', 'showTransl
     if (result.unknownWords) unknownWords = new Set(result.unknownWords);
     if (result.glossary) glossary = result.glossary;
     if (result.mergeDelay !== undefined) continuationThreshold = result.mergeDelay * 1000;
+    if (result.fontFamily) fontFamily = result.fontFamily;
+    if (result.fontSize !== undefined) fontSize = result.fontSize;
+    if (result.translatedFontFamily) translatedFontFamily = result.translatedFontFamily;
+    if (result.translatedFontSize !== undefined) translatedFontSize = result.translatedFontSize;
 });
 
 // Listen for settings updates
@@ -86,6 +94,18 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         }
         if (request.settings.mergeDelay !== undefined) {
             continuationThreshold = request.settings.mergeDelay * 1000;
+        }
+        if (request.settings.fontFamily) {
+            fontFamily = request.settings.fontFamily;
+        }
+        if (request.settings.fontSize !== undefined) {
+            fontSize = request.settings.fontSize;
+        }
+        if (request.settings.translatedFontFamily) {
+            translatedFontFamily = request.settings.translatedFontFamily;
+        }
+        if (request.settings.translatedFontSize !== undefined) {
+            translatedFontSize = request.settings.translatedFontSize;
         }
 
         console.log('Current state:', { translationEnabled, showTranslatedSubtitle, currentSubtitleText, continuationThreshold });
@@ -529,6 +549,9 @@ function showInteractiveSubtitle(text, translatedText) {
     clearSingleSelection({ skipTooltip: true });
     overlay.innerHTML = ''; // Clear previous content
 
+    overlay.style.fontFamily = `'${fontFamily}', sans-serif`;
+    overlay.style.fontSize = fontSize + 'px';
+
     // Create wrapper for relative positioning
     const wrapper = document.createElement('div');
     wrapper.style.position = 'relative';
@@ -566,6 +589,8 @@ function showInteractiveSubtitle(text, translatedText) {
         const translatedDiv = document.createElement('div');
         translatedDiv.className = 'oreilly-translated-subtitle';
         translatedDiv.textContent = translatedText;
+        translatedDiv.style.fontFamily = `'${translatedFontFamily}', sans-serif`;
+        translatedDiv.style.fontSize = translatedFontSize + 'px';
         wrapper.appendChild(document.createElement('br')); // Line break
         wrapper.appendChild(translatedDiv);
     }

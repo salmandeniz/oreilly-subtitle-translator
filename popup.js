@@ -1,5 +1,15 @@
 // Popup script
 document.addEventListener('DOMContentLoaded', () => {
+    // Tab switching
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            btn.classList.add('active');
+            document.getElementById(btn.dataset.tab + '-tab').classList.add('active');
+        });
+    });
+
     const targetLangSelect = document.getElementById('targetLang');
     const enableTranslationCheckbox = document.getElementById('enableTranslation');
     const apiKeyInput = document.getElementById('apiKey');
@@ -18,6 +28,13 @@ document.addEventListener('DOMContentLoaded', () => {
     const clearUnknownWordsBtn = document.getElementById('clearUnknownWordsBtn');
     const mergeDelaySlider = document.getElementById('mergeDelay');
     const mergeDelayValue = document.getElementById('mergeDelayValue');
+    const fontFamilySelect = document.getElementById('fontFamily');
+    const fontSizeSlider = document.getElementById('fontSize');
+    const fontSizeValue = document.getElementById('fontSizeValue');
+    const translatedFontFamilySelect = document.getElementById('translatedFontFamily');
+    const translatedFontSizeSlider = document.getElementById('translatedFontSize');
+    const translatedFontSizeValue = document.getElementById('translatedFontSizeValue');
+    const saveBtnAppearance = document.getElementById('saveBtnAppearance');
 
     let unknownWords = [];
 
@@ -25,8 +42,16 @@ document.addEventListener('DOMContentLoaded', () => {
         mergeDelayValue.textContent = mergeDelaySlider.value;
     });
 
+    fontSizeSlider.addEventListener('input', () => {
+        fontSizeValue.textContent = fontSizeSlider.value;
+    });
+
+    translatedFontSizeSlider.addEventListener('input', () => {
+        translatedFontSizeValue.textContent = translatedFontSizeSlider.value;
+    });
+
     // Load settings
-    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle', 'unknownWords', 'mergeDelay'], (result) => {
+    chrome.storage.sync.get(['targetLang', 'enabled', 'geminiApiKey', 'geminiModel', 'translationProvider', 'glossary', 'showTranslatedSubtitle', 'unknownWords', 'mergeDelay', 'fontFamily', 'fontSize', 'translatedFontFamily', 'translatedFontSize'], (result) => {
         if (result.targetLang) {
             targetLangSelect.value = result.targetLang;
         }
@@ -52,6 +77,20 @@ document.addEventListener('DOMContentLoaded', () => {
         if (result.mergeDelay !== undefined) {
             mergeDelaySlider.value = result.mergeDelay;
             mergeDelayValue.textContent = result.mergeDelay;
+        }
+        if (result.fontFamily) {
+            fontFamilySelect.value = result.fontFamily;
+        }
+        if (result.fontSize !== undefined) {
+            fontSizeSlider.value = result.fontSize;
+            fontSizeValue.textContent = result.fontSize;
+        }
+        if (result.translatedFontFamily) {
+            translatedFontFamilySelect.value = result.translatedFontFamily;
+        }
+        if (result.translatedFontSize !== undefined) {
+            translatedFontSizeSlider.value = result.translatedFontSize;
+            translatedFontSizeValue.textContent = result.translatedFontSize;
         }
 
         // Toggle Gemini config visibility
@@ -285,9 +324,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const translationProvider = providerSelect.value;
         const glossary = glossaryInput.value;
         const mergeDelay = parseInt(mergeDelaySlider.value, 10);
+        const fontFamily = fontFamilySelect.value;
+        const fontSize = parseInt(fontSizeSlider.value, 10);
+        const translatedFontFamily = translatedFontFamilySelect.value;
+        const translatedFontSize = parseInt(translatedFontSizeSlider.value, 10);
         const status = document.getElementById('status');
 
-        chrome.storage.sync.set({ targetLang, enabled, showTranslatedSubtitle, geminiApiKey, geminiModel, translationProvider, glossary, mergeDelay }, () => {
+        chrome.storage.sync.set({ targetLang, enabled, showTranslatedSubtitle, geminiApiKey, geminiModel, translationProvider, glossary, mergeDelay, fontFamily, fontSize, translatedFontFamily, translatedFontSize }, () => {
             // Only show status if triggered by button
             if (status) {
                 status.textContent = 'Settings saved!';
@@ -301,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (tabs[0]) {
                     chrome.tabs.sendMessage(tabs[0].id, {
                         action: 'updateSettings',
-                        settings: { targetLang, enabled, showTranslatedSubtitle, mergeDelay }
+                        settings: { targetLang, enabled, showTranslatedSubtitle, mergeDelay, fontFamily, fontSize, translatedFontFamily, translatedFontSize }
                     });
                 }
             });
@@ -312,11 +355,20 @@ document.addEventListener('DOMContentLoaded', () => {
     enableTranslationCheckbox.addEventListener('change', saveSettings);
     showTranslatedSubtitleCheckbox.addEventListener('change', saveSettings);
     mergeDelaySlider.addEventListener('change', saveSettings);
+    fontFamilySelect.addEventListener('change', saveSettings);
+    fontSizeSlider.addEventListener('change', saveSettings);
+    translatedFontFamilySelect.addEventListener('change', saveSettings);
+    translatedFontSizeSlider.addEventListener('change', saveSettings);
 
     // Save settings button
     saveBtn.addEventListener('click', () => {
         saveSettings();
-        setTimeout(() => window.close(), 500); // Close after short delay
+        setTimeout(() => window.close(), 500);
+    });
+
+    saveBtnAppearance.addEventListener('click', () => {
+        saveSettings();
+        setTimeout(() => window.close(), 500);
     });
 
     // Unknown words management

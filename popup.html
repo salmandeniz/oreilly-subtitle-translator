@@ -7,7 +7,6 @@
     <style>
         :root {
             --primary-color: #e02434;
-            /* O'Reilly Red-ish */
             --bg-color: #1a1a1a;
             --text-color: #ffffff;
             --secondary-bg: #2d2d2d;
@@ -25,10 +24,47 @@
         h1 {
             font-size: 18px;
             margin-top: 0;
-            margin-bottom: 20px;
+            margin-bottom: 15px;
             font-weight: 600;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0;
+            margin-bottom: 20px;
             border-bottom: 1px solid #333;
-            padding-bottom: 10px;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 10px 16px;
+            background-color: transparent;
+            color: #888;
+            border: none;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .tab-btn:hover {
+            color: #ccc;
+            background-color: transparent;
+        }
+
+        .tab-btn.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+            background-color: transparent;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
         }
 
         .control-group {
@@ -71,7 +107,6 @@
             color: white;
         }
 
-        /* Toggle Switch */
         .switch {
             position: relative;
             display: inline-block;
@@ -265,100 +300,147 @@
 <body>
     <h1>O'Reilly Translator</h1>
 
-    <div class="control-group">
-        <label for="targetLang">Target Language</label>
-        <select id="targetLang">
-            <option value="tr">Turkish (Türkçe)</option>
-            <option value="es">Spanish (Español)</option>
-            <option value="fr">French (Français)</option>
-            <option value="de">German (Deutsch)</option>
-            <option value="it">Italian (Italiano)</option>
-            <option value="pt">Portuguese (Português)</option>
-            <option value="ru">Russian (Русский)</option>
-            <option value="ja">Japanese (日本語)</option>
-            <option value="ko">Korean (한국어)</option>
-            <option value="zh-CN">Chinese (Simplified)</option>
-        </select>
+    <div class="tabs">
+        <button type="button" class="tab-btn active" data-tab="main">Main</button>
+        <button type="button" class="tab-btn" data-tab="appearance">Appearance</button>
     </div>
 
-    <div class="control-group">
-        <label for="provider">Translation Provider</label>
-        <select id="provider">
-            <option value="auto">Auto (Gemini if available)</option>
-            <option value="gemini">Gemini AI</option>
-            <option value="google">Google Translate</option>
-        </select>
-    </div>
-
-    <div class="control-group">
-        <label for="glossary">Glossary (Comma separated words to keep untranslated)</label>
-        <textarea id="glossary" rows="3" placeholder="e.g. React, State, Props"></textarea>
-    </div>
-
-    <div class="control-group" id="geminiConfig">
-        <label for="apiKey">Gemini API Key (Optional)</label>
-        <div style="position: relative;">
-            <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
-            <button type="button" id="toggleApiKey" class="toggle-visibility">👁️</button>
+    <div id="main-tab" class="tab-content active">
+        <div class="control-group">
+            <label for="targetLang">Target Language</label>
+            <select id="targetLang">
+                <option value="tr">Turkish (Türkçe)</option>
+                <option value="es">Spanish (Español)</option>
+                <option value="fr">French (Français)</option>
+                <option value="de">German (Deutsch)</option>
+                <option value="it">Italian (Italiano)</option>
+                <option value="pt">Portuguese (Português)</option>
+                <option value="ru">Russian (Русский)</option>
+                <option value="ja">Japanese (日本語)</option>
+                <option value="ko">Korean (한국어)</option>
+                <option value="zh-CN">Chinese (Simplified)</option>
+            </select>
         </div>
 
-        <div style="margin-top: 15px;">
-            <label for="geminiModel">Gemini Model</label>
-            <div style="display: flex; gap: 8px;">
-                <select id="geminiModel" style="flex-grow: 1;">
-                    <option value="gemini-1.5-flash-001">gemini-1.5-flash-001 (Default)</option>
-                </select>
-                <button type="button" id="refreshModelsBtn" style="width: auto; padding: 0 10px; font-size: 16px;"
-                    title="Refresh Models">🔄</button>
+        <div class="control-group">
+            <label for="provider">Translation Provider</label>
+            <select id="provider">
+                <option value="auto">Auto (Gemini if available)</option>
+                <option value="gemini">Gemini AI</option>
+                <option value="google">Google Translate</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="glossary">Glossary (Comma separated words to keep untranslated)</label>
+            <textarea id="glossary" rows="3" placeholder="e.g. React, State, Props"></textarea>
+        </div>
+
+        <div class="control-group" id="geminiConfig">
+            <label for="apiKey">Gemini API Key (Optional)</label>
+            <div style="position: relative;">
+                <input type="password" id="apiKey" placeholder="Enter your Gemini API key">
+                <button type="button" id="toggleApiKey" class="toggle-visibility">👁️</button>
+            </div>
+
+            <div style="margin-top: 15px;">
+                <label for="geminiModel">Gemini Model</label>
+                <div style="display: flex; gap: 8px;">
+                    <select id="geminiModel" style="flex-grow: 1;">
+                        <option value="gemini-1.5-flash-001">gemini-1.5-flash-001 (Default)</option>
+                    </select>
+                    <button type="button" id="refreshModelsBtn" style="width: auto; padding: 0 10px; font-size: 16px;"
+                        title="Refresh Models">🔄</button>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-top: 15px;">
+                <button type="button" id="testConnectionBtn"
+                    style="padding: 8px; font-size: 12px; background-color: #333;">Test Connection</button>
+            </div>
+            <div id="testStatus" style="margin-top: 5px; font-size: 12px;"></div>
+            <div class="help-text">
+                Get your free API key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
             </div>
         </div>
 
-        <div style="display: flex; gap: 10px; margin-top: 15px;">
-            <button type="button" id="testConnectionBtn"
-                style="padding: 8px; font-size: 12px; background-color: #333;">Test Connection</button>
+        <div id="providerStatus" class="provider-status"></div>
+
+        <div class="control-group">
+            <div class="toggle-container">
+                <label class="toggle-label">Enable Translation</label>
+                <label class="switch">
+                    <input type="checkbox" id="enableTranslation" checked>
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div class="toggle-container" style="margin-top: 10px;">
+                <label class="toggle-label">Show Full Translation</label>
+                <label class="switch">
+                    <input type="checkbox" id="showTranslatedSubtitle">
+                    <span class="slider"></span>
+                </label>
+            </div>
+            <div style="margin-top: 15px;">
+                <label for="mergeDelay">Subtitle Merge Delay: <span id="mergeDelayValue">5</span>s</label>
+                <input type="range" id="mergeDelay" min="1" max="10" value="5" style="width: 100%; margin-top: 5px;">
+                <div class="help-text">Time window for combining subtitle fragments</div>
+            </div>
         </div>
-        <div id="testStatus" style="margin-top: 5px; font-size: 12px;"></div>
-        <div class="help-text">
-            Get your free API key at <a href="https://aistudio.google.com/apikey" target="_blank">Google AI Studio</a>
+
+        <div class="control-group">
+            <label>Unknown Words</label>
+            <div id="unknownWordsList" class="unknown-words-list"></div>
+            <button id="clearUnknownWordsBtn"
+                style="margin-top: 10px; background-color: #666; font-size: 12px; padding: 8px;">Clear All Unknown
+                Words</button>
+            <div class="help-text">Right-click words in subtitles to mark/unmark as unknown</div>
         </div>
+
+        <button id="saveBtn">Save Settings</button>
+        <div id="status" class="status"></div>
     </div>
 
-    <div id="providerStatus" class="provider-status"></div>
-    </div>
-
-    <div class="control-group">
-        <div class="toggle-container">
-            <label class="toggle-label">Enable Translation</label>
-            <label class="switch">
-                <input type="checkbox" id="enableTranslation" checked>
-                <span class="slider"></span>
-            </label>
+    <div id="appearance-tab" class="tab-content">
+        <div class="control-group">
+            <label for="fontFamily">Subtitle Font Family</label>
+            <select id="fontFamily">
+                <option value="Segoe UI">Segoe UI</option>
+                <option value="Arial">Arial</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="system-ui">System UI</option>
+            </select>
         </div>
-        <div class="toggle-container" style="margin-top: 10px;">
-            <label class="toggle-label">Show Full Translation</label>
-            <label class="switch">
-                <input type="checkbox" id="showTranslatedSubtitle">
-                <span class="slider"></span>
-            </label>
-        </div>
-        <div style="margin-top: 15px;">
-            <label for="mergeDelay">Subtitle Merge Delay: <span id="mergeDelayValue">5</span>s</label>
-            <input type="range" id="mergeDelay" min="1" max="10" value="5" style="width: 100%; margin-top: 5px;">
-            <div class="help-text">Time window for combining subtitle fragments</div>
-        </div>
-    </div>
 
-    <div class="control-group">
-        <label>Unknown Words</label>
-        <div id="unknownWordsList" class="unknown-words-list"></div>
-        <button id="clearUnknownWordsBtn"
-            style="margin-top: 10px; background-color: #666; font-size: 12px; padding: 8px;">Clear All Unknown
-            Words</button>
-        <div class="help-text">Right-click words in subtitles to mark/unmark as unknown</div>
-    </div>
+        <div class="control-group">
+            <label for="fontSize">Subtitle Font Size: <span id="fontSizeValue">18</span>px</label>
+            <input type="range" id="fontSize" min="12" max="28" value="18" style="width: 100%; margin-top: 5px;">
+        </div>
 
-    <button id="saveBtn">Save Settings</button>
-    <div id="status" class="status"></div>
+        <div class="control-group">
+            <label for="translatedFontFamily">Translation Font Family</label>
+            <select id="translatedFontFamily">
+                <option value="Segoe UI">Segoe UI</option>
+                <option value="Arial">Arial</option>
+                <option value="Verdana">Verdana</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Courier New">Courier New</option>
+                <option value="system-ui">System UI</option>
+            </select>
+        </div>
+
+        <div class="control-group">
+            <label for="translatedFontSize">Translation Font Size: <span id="translatedFontSizeValue">14</span>px</label>
+            <input type="range" id="translatedFontSize" min="10" max="24" value="14" style="width: 100%; margin-top: 5px;">
+        </div>
+
+        <button id="saveBtnAppearance">Save Settings</button>
+        <div id="statusAppearance" class="status"></div>
+    </div>
 
     <script src="popup.js"></script>
 </body>
