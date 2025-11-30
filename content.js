@@ -600,7 +600,11 @@ function showInteractiveSubtitle(text, translatedText) {
 }
 
 async function handleWordClick(event, word) {
-    // Remove existing tooltips
+    if (singleSelectedElement === event.target) {
+        clearSingleSelection();
+        return;
+    }
+
     const existingTooltip = document.querySelector('.oreilly-translation-tooltip');
     if (existingTooltip) existingTooltip.remove();
 
@@ -687,14 +691,13 @@ function handleWordRightClick(event, word) {
     }
 
     const allWordSpans = document.querySelectorAll('.interactive-word');
+    const isUnknown = unknownWords.has(cleanWord);
     allWordSpans.forEach(span => {
         const spanCleanWord = span.textContent.replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "").toLowerCase();
         if (spanCleanWord === cleanWord) {
-            if (unknownWords.has(cleanWord)) {
-                span.className = 'interactive-word unknown';
-            } else {
-                span.className = 'interactive-word';
-            }
+            span.className = isUnknown ? 'interactive-word unknown' : 'interactive-word';
+            span.onmouseenter = isUnknown ? (e) => handleWordHover(e, spanCleanWord) : null;
+            span.onmouseleave = isUnknown ? () => handleWordHoverEnd() : null;
         }
     });
 
